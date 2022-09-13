@@ -87,4 +87,19 @@ public class UsbConnection extends DeviceConnection {
             throw new EscPosConnectionException(e.getMessage());
         }
     }
+
+    public boolean outOfPaper() throws EscPosConnectionException {
+        connect();
+
+        try {
+            this.outputStream.write(new byte[]{0x10, 0x04, 0x04});
+            byte[] result = ((UsbOutputStream) this.outputStream).read();
+            final byte PAPER_NOT_PRESENT_MASK = 0x60;
+            return result.length > 0 && (result[0] & PAPER_NOT_PRESENT_MASK) != 0x0;
+        } catch (IOException e) {
+            e.printStackTrace();
+            this.outputStream = null;
+            throw new EscPosConnectionException("Unable to query USB device paper state.");
+        }
+    }
 }

@@ -16,7 +16,8 @@ import java.nio.ByteBuffer;
 public class UsbOutputStream extends OutputStream {
     private UsbDeviceConnection usbConnection;
     private UsbInterface usbInterface;
-    private UsbEndpoint usbEndpoint;
+    private UsbEndpoint usbEndpointIn;
+    private UsbEndpoint usbEndpointOut;
 
     public UsbOutputStream(UsbManager usbManager, UsbDevice usbDevice) throws IOException {
 
@@ -25,9 +26,14 @@ public class UsbOutputStream extends OutputStream {
             throw new IOException("Unable to find USB interface.");
         }
 
-        this.usbEndpoint = UsbDeviceHelper.findEndpointIn(this.usbInterface);
-        if(this.usbEndpoint == null) {
-            throw new IOException("Unable to find USB endpoint.");
+        this.usbEndpointIn = UsbDeviceHelper.findEndpointIn(this.usbInterface);
+        if(this.usbEndpointIn == null) {
+            throw new IOException("Unable to find USB in endpoint.");
+        }
+
+        this.usbEndpointOut = UsbDeviceHelper.findEndpointOut(this.usbInterface);
+        if(this.usbEndpointOut == null) {
+            throw new IOException("Unable to find USB out endpoint.");
         }
 
         this.usbConnection = usbManager.openDevice(usbDevice);
@@ -48,7 +54,7 @@ public class UsbOutputStream extends OutputStream {
 
     @Override
     public void write(final @NonNull byte[] bytes, final int offset, final int length) throws IOException {
-        if (this.usbInterface == null || this.usbEndpoint == null || this.usbConnection == null) {
+        if (this.usbInterface == null || this.usbEndpointIn == null || this.usbConnection == null) {
             throw new IOException("Unable to connect to USB device.");
         }
 
@@ -59,13 +65,30 @@ public class UsbOutputStream extends OutputStream {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
         UsbRequest usbRequest = new UsbRequest();
         try {
-            usbRequest.initialize(this.usbConnection, this.usbEndpoint);
+            usbRequest.initialize(this.usbConnection, this.usbEndpointIn);
             if (!usbRequest.queue(buffer, bytes.length)) {
                 throw new IOException("Error queueing USB request.");
             }
             this.usbConnection.requestWait();
         } finally {
             usbRequest.close();
+        }
+    }
+
+    public byte[] read() throws IOException {
+        if (this.usbInterface == null || this.usbEndpointOut == null || this.usbConnection == null) {
+            throw new IOException("Unable to connect to USB interface");
+        }
+
+        final int bufferLength = 1024;
+        byte[] buffer = new byte[bufferLength];
+        int receivedBytes = this.usbConnection.bulkTransfer(this.usbEndpointOut, buffer, bufferLength, 3000);
+        if (receivedBytes > 0) {
+            byte[] result = new byte[receivedBytes];
+            System.arraycopy(buffer, 0, result, 0, receivedBytes);
+            return result;
+        } else {
+            return new byte[0];
         }
     }
 
@@ -79,7 +102,8 @@ public class UsbOutputStream extends OutputStream {
         if (this.usbConnection != null) {
             this.usbConnection.close();
             this.usbInterface = null;
-            this.usbEndpoint = null;
+            this.usbEndpointIn = null;
+            this.usbEndpointOut = null;
             this.usbConnection = null;
         }
     }

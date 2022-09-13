@@ -63,4 +63,8 @@ public abstract class DeviceConnection {
             throw new EscPosConnectionException(e.getMessage());
         }
     }
+
+    public boolean outOfPaper() throws EscPosConnectionException {
+        return false;
+    }
 }
